@@ -1,6 +1,8 @@
 package com.zcw.fingerprintdemo;
 
+import android.content.Context;
 import android.os.Bundle;
+import android.security.keystore.KeyProperties;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.DialogFragment;
@@ -18,6 +20,9 @@ import com.zcw.fingerprintdemo.util.FingerUtil;
  */
 public class FingerFragment extends DialogFragment {
 
+    /** 需要加密的数据 */
+    public static final String SECRET_MESSAGE = "Very secret message";
+
     private FingerUtil fingerUtil;
 
     /** 显示提示图标 */
@@ -25,6 +30,17 @@ public class FingerFragment extends DialogFragment {
 
     /** 用来显示提示信息 */
     private TextView tvHint;
+
+    private MainActivity activity;
+
+    /** 用于表示指纹识别是加密，还是解密 */
+    private int purpose;
+
+    @Override
+    public void onAttach(Context context) {
+        super.onAttach(context);
+        activity = (MainActivity) getActivity();
+    }
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -34,10 +50,15 @@ public class FingerFragment extends DialogFragment {
     }
 
     private void init() {
-        fingerUtil = new FingerUtil(getActivity());
-        fingerUtil.setCallback(new FingerUtil.Callback() {
+        FingerUtil.Callback callback = new FingerUtil.Callback() {
             @Override
-            public void onAuthenticated() {
+            public void onAuthenticated(String message) {
+                if(getPurpose() == KeyProperties.PURPOSE_ENCRYPT) {
+                    activity.setEncryptData(message);
+                }
+                else {
+                    activity.setDecryptData(message);
+                }
                 CommonUtils.toast(getActivity(), "指纹识别成功");
                 dismiss();
             }
@@ -46,7 +67,8 @@ public class FingerFragment extends DialogFragment {
             public void onError(int code, String message) {
                 showError(message);
             }
-        });
+        };
+        fingerUtil = new FingerUtil(getActivity(), callback);
     }
 
     @Nullable
@@ -69,13 +91,21 @@ public class FingerFragment extends DialogFragment {
             }
         });
 
-        fingerUtil.startAuthenticate();
+        fingerUtil.startAuthenticate(getPurpose());
     }
 
     @Override
     public void onPause() {
         super.onPause();
         fingerUtil.stopAuthenticate();
+    }
+
+    public int getPurpose() {
+        return purpose;
+    }
+
+    public void setPurpose(int purpose) {
+        this.purpose = purpose;
     }
 
     private void showError(String message) {
