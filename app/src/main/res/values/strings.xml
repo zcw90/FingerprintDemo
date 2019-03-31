@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">FingerprintDemo</string>
+    <string name="finger_authenticate_failed">指纹验证失败</string>
 </resources>

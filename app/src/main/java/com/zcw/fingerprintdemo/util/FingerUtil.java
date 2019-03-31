@@ -13,6 +13,7 @@ import com.zcw.base.CommonUtils;
 import com.zcw.fingerprintdemo.App;
 import com.zcw.fingerprintdemo.FingerFragment;
 import com.zcw.fingerprintdemo.Preference;
+import com.zcw.fingerprintdemo.R;
 
 import java.security.KeyStore;
 import java.security.NoSuchAlgorithmException;
@@ -101,11 +102,17 @@ public class FingerUtil extends FingerprintManager.AuthenticationCallback {
 
         try {
             SecretKey key = (SecretKey) keyStore.getKey(KEY, null);
+
             if(getPurpose() == KeyProperties.PURPOSE_ENCRYPT) {
                 cipher.init(Cipher.ENCRYPT_MODE, key);
             }
             else {
                 String iv = Preference.getString(Preference.FINGER_KEY_IV, App.app.preferences);
+                if(key == null || iv.equals("")) {
+                    callback.onError(ERROR_CLOSE, context.getString(R.string.finger_authenticate_failed));
+                    return ;
+                }
+
                 byte[] ivByte = Base64.decode(iv, Base64.URL_SAFE);
                 cipher.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(ivByte));
             }
@@ -123,7 +130,7 @@ public class FingerUtil extends FingerprintManager.AuthenticationCallback {
      * @param keyStore 密钥库
      * @param keyGenerator 生成密钥工具类
      */
-    private void createKey(KeyStore keyStore, KeyGenerator keyGenerator) {
+    private SecretKey createKey(KeyStore keyStore, KeyGenerator keyGenerator) {
         try {
             keyStore.load(null);
             KeyGenParameterSpec.Builder builder = new KeyGenParameterSpec.Builder(KEY,
@@ -133,7 +140,7 @@ public class FingerUtil extends FingerprintManager.AuthenticationCallback {
                     .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_PKCS7);
 
             keyGenerator.init(builder.build());
-            keyGenerator.generateKey();     // 生成密钥
+            return keyGenerator.generateKey();     // 生成密钥
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -189,7 +196,7 @@ public class FingerUtil extends FingerprintManager.AuthenticationCallback {
 
         FingerprintManager.CryptoObject cryptoObject = result.getCryptoObject();
         if(cryptoObject == null) {
-            callback.onError(ERROR_CLOSE, "指纹识别失败");
+            callback.onError(ERROR_CLOSE, context.getString(R.string.finger_authenticate_failed));
             return ;
         }
 
@@ -213,7 +220,7 @@ public class FingerUtil extends FingerprintManager.AuthenticationCallback {
             callback.onAuthenticated(data);
         } catch (Exception e) {
             e.printStackTrace();
-            callback.onError(ERROR_CLOSE, "指纹识别失败");
+            callback.onError(ERROR_CLOSE, context.getString(R.string.finger_authenticate_failed));
         }
     }
 
