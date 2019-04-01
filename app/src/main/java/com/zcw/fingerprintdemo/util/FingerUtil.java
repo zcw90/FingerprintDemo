@@ -5,7 +5,6 @@ import android.content.Context;
 import android.hardware.fingerprint.FingerprintManager;
 import android.os.Build;
 import android.os.CancellationSignal;
-import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
 
@@ -15,15 +14,7 @@ import com.zcw.fingerprintdemo.FingerFragment;
 import com.zcw.fingerprintdemo.Preference;
 import com.zcw.fingerprintdemo.R;
 
-import java.security.KeyStore;
-import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
-
 import javax.crypto.Cipher;
-import javax.crypto.KeyGenerator;
-import javax.crypto.NoSuchPaddingException;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.IvParameterSpec;
 
 import io.reactivex.annotations.NonNull;
 
@@ -33,7 +24,6 @@ import io.reactivex.annotations.NonNull;
  */
 @SuppressLint("NewApi")
 public class FingerUtil extends FingerprintManager.AuthenticationCallback {
-    private static final String KEY = "finger_key";
 
     /** 指纹识别错误码，会关闭指纹传感器 */
     public static final int ERROR_CLOSE = 101;
@@ -52,98 +42,45 @@ public class FingerUtil extends FingerprintManager.AuthenticationCallback {
     /** 用于表示指纹识别是加密，还是解密 */
     private int purpose;
 
+    /** 加密相关工具类 */
+    private FingerSecurity fingerSecurity;
+
     public FingerUtil(@NonNull Context context, @NonNull Callback callback) {
         this.context = context;
         this.callback = callback;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            this.fingerprintManager = (FingerprintManager)context.getSystemService(Context.FINGERPRINT_SERVICE);
+            fingerprintManager = (FingerprintManager)context.getSystemService(Context.FINGERPRINT_SERVICE);
+            fingerSecurity = new FingerSecurity();
         }
     }
 
     /**
-     *
-     */
-    /**
      * 开始指纹识别
-     * @param purpose 指纹识别类型，{@link android.security.keystore.KeyProperties#PURPOSE_ENCRYPT}为加密；<br />
-     *                      {@link android.security.keystore.KeyProperties#PURPOSE_DECRYPT}为解密；
+     * @param purpose 指纹识别类型。<br />
+     *                  {@link android.security.keystore.KeyProperties#PURPOSE_ENCRYPT}为加密；<br />
+     *                  {@link android.security.keystore.KeyProperties#PURPOSE_DECRYPT}为解密；
      */
     public void startAuthenticate(int purpose) {
-        setPurpose(purpose);
+        if(purpose != KeyProperties.PURPOSE_ENCRYPT && purpose != KeyProperties.PURPOSE_DECRYPT) {
+            throw new IllegalArgumentException("Unknown purpose: " + purpose);
+        }
+
         if(fingerprintManager == null) {
             CommonUtils.toast(context, "设备不支持指纹功能");
             return ;
         }
 
-        Cipher cipher;
-        try {
-            cipher = Cipher.getInstance("AES/CBC/PKCS7Padding");
-        } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
-            throw new RuntimeException("Failed to get an instance of Cipher", e);
-        }
-
-        KeyStore keyStore;
-        try {
-            keyStore = KeyStore.getInstance("AndroidKeyStore");
-            keyStore.load(null);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to get an instance of KeyStore", e);
-        }
-
-        KeyGenerator keyGenerator;
-        try {
-            keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
-        } catch (NoSuchAlgorithmException | NoSuchProviderException e) {
-            throw new RuntimeException("Failed to get an instance of KeyGenerator", e);
-        }
-        if(getPurpose() == KeyProperties.PURPOSE_ENCRYPT) {
-            createKey(keyStore, keyGenerator);
-        }
-
-        try {
-            SecretKey key = (SecretKey) keyStore.getKey(KEY, null);
-
-            if(getPurpose() == KeyProperties.PURPOSE_ENCRYPT) {
-                cipher.init(Cipher.ENCRYPT_MODE, key);
-            }
-            else {
-                String iv = Preference.getString(Preference.FINGER_KEY_IV, App.app.preferences);
-                if(key == null || iv.equals("")) {
-                    callback.onError(ERROR_CLOSE, context.getString(R.string.finger_authenticate_failed));
-                    return ;
-                }
-
-                byte[] ivByte = Base64.decode(iv, Base64.URL_SAFE);
-                cipher.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(ivByte));
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to init Cipher", e);
+        setPurpose(purpose);
+        String iv = purpose == KeyProperties.PURPOSE_ENCRYPT ? null : Preference.getString(Preference.FINGER_KEY_IV, App.app.preferences);
+        Cipher cipher = fingerSecurity.initCipher(purpose, iv);
+        if(cipher == null) {
+            callback.onError(ERROR_CLOSE, context.getString(R.string.finger_authenticate_failed));
+            return ;
         }
 
         FingerprintManager.CryptoObject cryptoObject = new FingerprintManager.CryptoObject(cipher);
         cancellationSignal = new CancellationSignal();
         fingerprintManager.authenticate(cryptoObject, cancellationSignal, 0, this, null);
-    }
-
-    /**
-     * 生成密钥
-     * @param keyStore 密钥库
-     * @param keyGenerator 生成密钥工具类
-     */
-    private SecretKey createKey(KeyStore keyStore, KeyGenerator keyGenerator) {
-        try {
-            keyStore.load(null);
-            KeyGenParameterSpec.Builder builder = new KeyGenParameterSpec.Builder(KEY,
-                    KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
-                    .setBlockModes(KeyProperties.BLOCK_MODE_CBC)
-                    .setUserAuthenticationRequired(true)
-                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_PKCS7);
-
-            keyGenerator.init(builder.build());
-            return keyGenerator.generateKey();     // 生成密钥
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
     }
 
     /**
@@ -201,26 +138,34 @@ public class FingerUtil extends FingerprintManager.AuthenticationCallback {
         }
 
         Cipher cipher = cryptoObject.getCipher();
-        try {
-            String data;
-            if(getPurpose() == KeyProperties.PURPOSE_ENCRYPT) {
+        String data;
+        if(getPurpose() == KeyProperties.PURPOSE_ENCRYPT) {
+            try {
                 // 保存加密后的数据
                 byte[] encryptData = cipher.doFinal(FingerFragment.SECRET_MESSAGE.getBytes());
                 data = Base64.encodeToString(encryptData, Base64.URL_SAFE);
                 String keyIV = Base64.encodeToString(cipher.getIV(), Base64.URL_SAFE);
                 Preference.putString(Preference.FINGER_DATA, data, App.app.preferences);
                 Preference.putString(Preference.FINGER_KEY_IV, keyIV, App.app.preferences);
+                callback.onAuthenticated(data);
             }
-            else {
+            catch (Exception e) {
+                e.printStackTrace();
+                callback.onError(ERROR_CLOSE, context.getString(R.string.finger_authenticate_failed));
+            }
+        }
+        else {
+            try {
                 // 解密数据
                 String encrypt = Preference.getString(Preference.FINGER_DATA, App.app.preferences);
                 byte[] encryptByte = cipher.doFinal(Base64.decode(encrypt, Base64.URL_SAFE));
                 data = new String(encryptByte);
+                callback.onAuthenticated(data);
             }
-            callback.onAuthenticated(data);
-        } catch (Exception e) {
-            e.printStackTrace();
-            callback.onError(ERROR_CLOSE, context.getString(R.string.finger_authenticate_failed));
+            catch (Exception e) {
+                e.printStackTrace();
+                callback.onError(ERROR_CLOSE, context.getString(R.string.finger_change));
+            }
         }
     }
 
