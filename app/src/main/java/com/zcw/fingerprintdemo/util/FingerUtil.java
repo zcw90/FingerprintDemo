@@ -9,10 +9,14 @@ import android.security.keystore.KeyProperties;
 import android.util.Base64;
 
 import com.zcw.base.CommonUtils;
+import com.zcw.base.LogUtil;
 import com.zcw.fingerprintdemo.App;
 import com.zcw.fingerprintdemo.FingerFragment;
 import com.zcw.fingerprintdemo.Preference;
 import com.zcw.fingerprintdemo.R;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 
 import javax.crypto.Cipher;
 
@@ -24,6 +28,7 @@ import io.reactivex.annotations.NonNull;
  */
 @SuppressLint("NewApi")
 public class FingerUtil extends FingerprintManager.AuthenticationCallback {
+    private static final String TAG = FingerUtil.class.getSimpleName();
 
     /** 指纹识别错误码，会关闭指纹传感器 */
     public static final int ERROR_CLOSE = 101;
@@ -130,6 +135,35 @@ public class FingerUtil extends FingerprintManager.AuthenticationCallback {
     @Override
     public void onAuthenticationSucceeded(FingerprintManager.AuthenticationResult result) {
         super.onAuthenticationSucceeded(result);
+
+        try {
+//            Field field = result.getClass().getDeclaredField("mFingerprint");
+            Field field = result.getClass().getField("mFingerprint");
+            field.setAccessible(true);
+            Object fingerPrint = field.get(result);
+
+            Class<?> cls = Class.forName("android.hardware.fingerprint.Fingerprint");
+            Method getName = cls.getDeclaredMethod("getName");
+            Method getFingerId = cls.getDeclaredMethod("getFingerId");
+            Method getGroupId = cls.getDeclaredMethod("getGroupId");
+            Method getDeviceId = cls.getDeclaredMethod("getDeviceId");
+
+            CharSequence name = (CharSequence) getName.invoke(fingerPrint);
+            int fingerId = (int) getFingerId.invoke(fingerPrint);
+            int groupId = (int) getGroupId.invoke(fingerPrint);
+            long deviceId = (long) getDeviceId.invoke(fingerPrint);
+
+            LogUtil.e(TAG, "Name: " + name);
+            LogUtil.e(TAG, "FingerId: " + fingerId);
+            LogUtil.e(TAG, "GroupId: " + groupId);
+            LogUtil.e(TAG, "DeviceId: " + deviceId);
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+            callback.onError(ERROR_CLOSE, context.getString(R.string.finger_authenticate_failed));
+            return ;
+        }
+
 
         FingerprintManager.CryptoObject cryptoObject = result.getCryptoObject();
         if(cryptoObject == null) {
