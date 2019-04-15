@@ -3,15 +3,9 @@ package com.zcw.fingerprintdemo.util;
 import android.Manifest;
 import android.app.KeyguardManager;
 import android.content.Context;
-import android.content.pm.PackageManager;
 import android.hardware.fingerprint.FingerprintManager;
-import android.os.Build;
-import android.support.v4.content.ContextCompat;
-import android.support.v4.content.PermissionChecker;
-import android.support.v4.hardware.fingerprint.FingerprintManagerCompat;
 
 import com.zcw.base.CommonUtils;
-import com.zcw.fingerprintdemo.MainActivity;
 
 /**
  * Created by 朱城委 on 2019/3/28.<br><br>

@@ -2,7 +2,6 @@ package com.zcw.fingerprintdemo;
 
 import android.content.Context;
 import android.os.Bundle;
-import android.security.keystore.KeyProperties;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.DialogFragment;
@@ -13,6 +12,8 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.zcw.base.CommonUtils;
+import com.zcw.fingerprintdemo.util.FingerAdvanceUtil;
+import com.zcw.fingerprintdemo.util.FingerSimpleUtil;
 import com.zcw.fingerprintdemo.util.FingerUtil;
 
 /**
@@ -31,7 +32,7 @@ public class FingerFragment extends DialogFragment {
     /** 用来显示提示信息 */
     private TextView tvHint;
 
-    private MainActivity activity;
+    private AdvanceActivity activity = null;
 
     /** 用于表示指纹识别是加密，还是解密 */
     private int purpose;
@@ -39,7 +40,9 @@ public class FingerFragment extends DialogFragment {
     @Override
     public void onAttach(Context context) {
         super.onAttach(context);
-        activity = (MainActivity) getActivity();
+        if(getActivity() instanceof AdvanceActivity) {
+            activity = (AdvanceActivity) getActivity();
+        }
     }
 
     @Override
@@ -53,12 +56,10 @@ public class FingerFragment extends DialogFragment {
         FingerUtil.Callback callback = new FingerUtil.Callback() {
             @Override
             public void onAuthenticated(String message) {
-                if(getPurpose() == KeyProperties.PURPOSE_ENCRYPT) {
-                    activity.setEncryptData(message);
+                if(activity != null) {
+                    activity.setData(message, getPurpose());
                 }
-                else {
-                    activity.setDecryptData(message);
-                }
+
                 CommonUtils.toast(getActivity(), "指纹识别成功");
                 dismiss();
             }
@@ -68,7 +69,15 @@ public class FingerFragment extends DialogFragment {
                 showError(message);
             }
         };
-        fingerUtil = new FingerUtil(getActivity(), callback);
+
+        // 通过Intent传递过来的参数，区分是指纹简单使用，还是进阶使用
+        int type = getActivity().getIntent().getIntExtra(MainActivity.TYPE_FINGER, MainActivity.TYPE_FINGER_SIMPLE);
+        if(type == MainActivity.TYPE_FINGER_SIMPLE) {
+            fingerUtil = new FingerSimpleUtil(getActivity(), callback);
+        }
+        else {
+            fingerUtil = new FingerAdvanceUtil(getActivity(), callback);
+        }
     }
 
     @Nullable

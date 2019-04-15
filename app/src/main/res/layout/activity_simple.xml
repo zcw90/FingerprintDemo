@@ -4,29 +4,17 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".MainActivity">
+    tools:context=".SimpleActivity">
 
     <Button
-        android:id="@+id/btn_finger_simple"
+        android:id="@+id/btn_simple_finger_recognition"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="指纹简单使用"
+        android:text="开始指纹识别"
         android:textColor="@color/white"
         android:background="@drawable/selector_button"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
-
-    <Button
-        android:id="@+id/btn_finger_advance"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="指纹进阶使用"
-        android:textColor="@color/white"
-        android:background="@drawable/selector_button"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/btn_finger_simple" />
 </android.support.constraint.ConstraintLayout>
