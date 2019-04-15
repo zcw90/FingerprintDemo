@@ -38,7 +38,7 @@ public class FingerSimpleUtil extends FingerUtil {
     }
 
     /**
-     * 指纹识别成功，不会关闭指纹传感器。
+     * 指纹识别成功，会关闭指纹传感器。
      * @param result
      */
     @Override
